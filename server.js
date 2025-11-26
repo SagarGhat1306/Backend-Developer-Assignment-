@@ -1,10 +1,15 @@
 // server.js
 // Small express server for inventory assignment.
 // Author: Satish
+import dotenv from "dotenv";
+dotenv.config();
 
 import express from "express";
 import connectDB from "./config/db.js";
 import productRoutes from "./routes/productRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
+import auditRoutes from "./routes/auditRoutes.js";
+
 
 const app = express();
 
@@ -19,6 +24,8 @@ const app = express();
 
 app.use(express.json());
 app.use("/api", productRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api", auditRoutes);
 
 
 app.get("/status", (req, res) => {
@@ -30,5 +37,5 @@ app.get("/status", (req, res) => {
 });
 
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

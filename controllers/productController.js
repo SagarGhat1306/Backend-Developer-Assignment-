@@ -1,12 +1,9 @@
 // controllers/productController.js
 // Basic CRUD and transaction logic for product inventory
 // Author: Sagar
-
-
 import Product from "../models/Product.js";
 import Transaction from "../models/Transaction.js";
 import mongoose from "mongoose";
-
 
 const findProductOrThrow = async (id) => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -35,7 +32,6 @@ export const createProduct = async (req, res) => {
     // normalize SKU to uppercase
     const normalizedSku = String(sku).trim().toUpperCase();
 
-    
     const already = await Product.findOne({ sku: normalizedSku });
     if (already) {
       return res.status(409).json({ message: `SKU already exists: ${normalizedSku}` });
@@ -44,10 +40,8 @@ export const createProduct = async (req, res) => {
     const product = new Product({ name: String(name).trim(), sku: normalizedSku, stock: initialStock });
     await product.save();
 
-  
     return res.status(201).json(product);
   } catch (err) {
-   
     if (err.code === 11000) {
       return res.status(409).json({ message: "SKU already exists" });
     }
@@ -65,23 +59,23 @@ export const increaseStock = async (req, res) => {
     return res.status(400).json({ message: "Quantity must be provided and > 0" });
   }
 
-  const session = await mongoose.startSession();
-  session.startTransaction();
   try {
     const product = await findProductOrThrow(id);
 
     product.stock = product.stock + Number(quantity);
-    await product.save({ session });
+    await product.save();
 
-    await Transaction.create([{ productId: product._id, type: "INCREASE", quantity }], { session });
-
-    await session.commitTransaction();
-    session.endSession();
+    await Transaction.create({
+      productId: product._id,
+      userId: req.user._id,
+      userRole: req.user.role,
+      type: "INCREASE",
+      quantity: Number(quantity),
+      timestamp: new Date()
+    });
 
     return res.json({ message: "Stock increased", product });
   } catch (err) {
-    await session.abortTransaction();
-    session.endSession();
     console.error("[increaseStock] Error:", err.message);
     return res.status(err.status || 500).json({ message: err.message || "Server error" });
   }
@@ -96,30 +90,27 @@ export const decreaseStock = async (req, res) => {
     return res.status(400).json({ message: "Quantity must be provided and > 0" });
   }
 
-  const session = await mongoose.startSession();
-  session.startTransaction();
   try {
     const product = await findProductOrThrow(id);
 
     if (product.stock < Number(quantity)) {
-      
-      await session.abortTransaction();
-      session.endSession();
       return res.status(400).json({ message: "Insufficient stock to complete this operation" });
     }
 
     product.stock = product.stock - Number(quantity);
-    await product.save({ session });
+    await product.save();
 
-    await Transaction.create([{ productId: product._id, type: "DECREASE", quantity }], { session });
-
-    await session.commitTransaction();
-    session.endSession();
+    await Transaction.create({
+      productId: product._id,
+      userId: req.user._id,
+      userRole: req.user.role,
+      type: "DECREASE",
+      quantity: Number(quantity),
+      timestamp: new Date()
+    });
 
     return res.json({ message: "Stock decreased", product });
   } catch (err) {
-    await session.abortTransaction();
-    session.endSession();
     console.error("[decreaseStock] Error:", err.message);
     return res.status(err.status || 500).json({ message: err.message || "Server error" });
   }
@@ -131,7 +122,6 @@ export const getProductSummary = async (req, res) => {
     const { id } = req.params;
     const product = await findProductOrThrow(id);
 
-  
     const agg = await Transaction.aggregate([
       { $match: { productId: product._id } },
       { $group: { _id: "$type", total: { $sum: "$quantity" } } }
@@ -158,7 +148,7 @@ export const getProductSummary = async (req, res) => {
 export const getTransactions = async (req, res) => {
   try {
     const { id } = req.params;
-    await findProductOrThrow(id); 
+    await findProductOrThrow(id);
 
     const transactions = await Transaction.find({ productId: id }).sort({ timestamp: -1 });
 
