@@ -39,7 +39,7 @@ app.get("/status", (req, res) => {
 
 app.get("/", (req, res) => {
   res.send("Backend is working!");
-  res.send("Successful Build and Deployed")
+  res.send("Successful Build and Deployed");
 });
 
 const PORT = process.env.PORT;
